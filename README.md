@@ -1,8 +1,9 @@
-```shell
-    git submodule update --init --recursive
-```
+## Install
+
+go > 1.23.1
 
 ```shell
+    git submodule update --init --recursive
     make build
 ```
 
@@ -23,7 +24,7 @@
     make start-dual
 
     #run triple node
-    make tart-triple
+    make start-triple
 
     #run quad node
     make start-quad
