@@ -1,0 +1,6 @@
+/bin/*
+/node/*
+
+tx_log.txt
+tx_results.json
+cache.json

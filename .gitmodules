@@ -1,0 +1,3 @@
+[submodule "cronos"]
+	path = cronos
+	url = https://github.com/crypto-org-chain/cronos
