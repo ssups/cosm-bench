@@ -33,7 +33,7 @@ go > 1.23.1
 ## Tps 측정
 
 ```shell
-    # 테스트 계정 수만큼의 singed tx(serialized) 세팅
+    # 테스트 계정 수만큼의 singed tx(serialized) 세팅, 첫 블록 생성전까지 잠시 기달
     make reload
 
     # 트잭 전송 및 측정
