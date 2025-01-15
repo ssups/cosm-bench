@@ -105,6 +105,7 @@ start-single: _clean_nodes
 	@$(call setup_genesis,$(SIGLE_NODE))
 	@echo "Starting single node..."
 	@$(MAKE) _start_node NODE_NUM=1
+	@echo '{"node_num" : "1"}' > cache.json
 	@echo "Single node setup complete"
 
 # 2개 노드 실행  
