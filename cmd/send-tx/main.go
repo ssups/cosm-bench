@@ -334,6 +334,9 @@ func main() {
 		allTxInfos = append(allTxInfos, txInfo)
 	}
 	maxRetries := int(math.Ceil(float64(numTxs) / 50 * 1.5))
+	if maxRetries < 50 {
+		maxRetries = 3
+	}
 	succeedInfos := FetchBlockInfoBatch(ctx, allTxInfos, nodeClients[0].Client, maxRetries)
 
 	sort.Slice(succeedInfos, func(i, j int) bool {
