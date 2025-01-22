@@ -16,6 +16,7 @@ import (
 
 	"github.com/cometbft/cometbft/libs/bytes"
 	"github.com/cometbft/cometbft/rpc/client/http"
+	"github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/client"
 )
 
@@ -89,7 +90,7 @@ var (
 func FindCommitTimeInLog(logFile string, height int64) (int64, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get working directory: %v\n", err)
+		return 0, fmt.Errorf("failed to get working directory: %v", err)
 	}
 	file, err := os.Open(wd + logFile)
 	if err != nil {
@@ -235,21 +236,22 @@ func SendTransaction(
 
 	timestamp := time.Now().UTC().UnixMilli()
 
-	res, err := selectedNode.Client.BroadcastTxSync(context.Background(), txBytes)
+	res, err := selectedNode.Client.BroadcastTxSync(context.Background(), types.Tx(txBytes))
 	if err != nil {
 		fmt.Printf("[TxSequence %d, Node %d] Failed to broadcast tx: %v\n", txIdx, nodeIdx, err)
 		return
 	}
+
+	fileMutex.Lock()
+	fmt.Fprintf(logFile, "txIdx: %d txHash: %v time: %d node: %s\n",
+		txIdx, res.Hash.Bytes(), timestamp, selectedNode.Address)
+	fileMutex.Unlock()
+
 	txInfo := TxInfo{
 		TxHash:   res.Hash,
 		SendTime: timestamp,
 	}
 	txInfos <- txInfo
-
-	fileMutex.Lock()
-	fmt.Fprintf(logFile, "txIdx: %d txHash: %s time: %d node: %s\n",
-		txIdx, res.Hash.String(), timestamp, selectedNode.Address)
-	fileMutex.Unlock()
 }
 
 func main() {

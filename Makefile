@@ -7,7 +7,7 @@ else
 endif  
 
 # 테스트 계정수
-NUM_ACCOUNTS := 50
+NUM_ACCOUNTS := 10
 
 # 기본 설정
 BIN_PATH := ./bin
@@ -37,13 +37,15 @@ QUAD_NODE := 4
 # .PHONY 타겟 설정  
 .PHONY: _clean_nodes start-single start-dual start-triple start-quad stop status build
 
-
-
 build:
-	@mkdir bin
-	@cd cronos && $(MAKE) build && mv build/cronosd ../bin && cd ..
-	@go build -o bin/key-gen ./cmd/key-gen  
-	@go build -o bin/send-tx ./cmd/send-tx  
+	@mkdir -p bin 
+	@if [ ! -f bin/cronosd ]; then \
+		cd cronos && $(MAKE) build && mv build/cronosd ../bin; \
+	fi
+	@go build -o bin/gen-key ./cmd/gen-key  
+	@go build -o bin/gen-tx ./cmd/gen-tx  
+	@go build -o bin/send-tx ./cmd/send-tx
+	@go build -o bin/add-genesis-account ./cmd/add-genesis-account
 
 # 초기화
 define init_nodes  
@@ -53,10 +55,6 @@ define init_nodes
 		mkdir -p $(BASE_PATH)/node$$i; \
 		$(BIN_PATH)/cronosd init $(MONIKER) --chain-id $(CHAINID) --home $(BASE_PATH)/node$$i; \
 	done  
-	mkdir -p $(BASE_PATH)/txns/signed
-	mkdir -p $(BASE_PATH)/txns/unsigned
-	mkdir -p $(BASE_PATH)/txns/encoded 
-	mkdir -p $(BASE_PATH)/txns/sent 
 endef  
 
 # 제네시스 설정 함수  
@@ -90,17 +88,15 @@ define setup_genesis
 		fi; \
 	done
 
-	$(BIN_PATH)/key-gen -a $(NUM_ACCOUNTS)
-	@for i in $$(seq $(i) $(NUM_ACCOUNTS)); do \
-		$(BIN_PATH)/cronosd genesis add-genesis-account test-key-$${i} --keyring-backend $(KEYRING) 100000000000000000000000000stake --home $(BASE_PATH)/node1; \
-	done
-
+	$(BIN_PATH)/gen-key -a $(NUM_ACCOUNTS)
+	$(BIN_PATH)/add-genesis-account -a $(NUM_ACCOUNTS)
 	$(BIN_PATH)/cronosd genesis collect-gentxs --home $(BASE_PATH)/node1
 	$(BIN_PATH)/cronosd genesis validate --home $(BASE_PATH)/node1
 endef  
 
 # 단일 노드 실행  
-start-single: _clean_nodes
+start-single: 
+	@$(MAKE) _clean_nodes
 	@$(call init_nodes,$(SIGLE_NODE))
 	@$(call setup_genesis,$(SIGLE_NODE))
 	@echo "Starting single node..."
@@ -109,7 +105,8 @@ start-single: _clean_nodes
 	@echo "Single node setup complete"
 
 # 2개 노드 실행  
-start-dual: _clean_nodes
+start-dual: 
+	@$(MAKE) _clean_nodes
 	@$(call init_nodes,$(DUAL_NODE))
 	@$(call setup_genesis,$(DUAL_NODE))
 	@echo "Starting dual nodes..."
@@ -120,7 +117,8 @@ start-dual: _clean_nodes
 	@echo "Dual nodes setup complete"
 
 # 3개 노드 실행  
-start-triple: _clean_nodes
+start-triple:
+	@$(MAKE) _clean_nodes
 	@$(call init_nodes,$(TRIPLE_NODE))
 	@$(call setup_genesis,$(TRIPLE_NODE))
 	@echo "Starting triple nodes..."
@@ -132,7 +130,8 @@ start-triple: _clean_nodes
 	@echo "Triple nodes setup complete"
 
 # 4개 노드 실행  
-start-quad: _clean_nodes
+start-quad:
+	@$(MAKE) _clean_nodes
 	@$(call init_nodes,$(QUAD_NODE))
 	@$(call setup_genesis,$(QUAD_NODE))
 	@echo "Starting quad nodes..."
@@ -145,12 +144,17 @@ start-quad: _clean_nodes
 	@echo "Quad nodes setup complete"
 
 reload:
-	@TO_ADDR=$$($(BIN_PATH)/cronosd keys show node1key --keyring-backend $(KEYRING) --home $(BASE_PATH)/node1 -a); \
-	for i in $$(seq 1 $(NUM_ACCOUNTS)); do \
-		$(BIN_PATH)/cronosd tx bank send test-key-$$i $$TO_ADDR 100stake --chain-id $(CHAINID) --home $(BASE_PATH)/node1 --keyring-backend $(KEYRING) --generate-only > $(BASE_PATH)/txns/unsigned/txns$$i.json; \
-		$(BIN_PATH)/cronosd tx sign $(BASE_PATH)/txns/unsigned/txns$$i.json --chain-id $(CHAINID) --from test-key-$$i --home $(BASE_PATH)/node1 --keyring-backend $(KEYRING) > $(BASE_PATH)/txns/signed/txns$$i.json; \
-		$(BIN_PATH)/cronosd tx encode $(BASE_PATH)/txns/signed/txns$$i.json > $(BASE_PATH)/txns/encoded/txns$$i.json; \
-	done 
+	$(BIN_PATH)/gen-tx --a $(NUM_ACCOUNTS)
+# mkdir -p $(BASE_PATH)/txns/signed
+# mkdir -p $(BASE_PATH)/txns/unsigned
+# mkdir -p $(BASE_PATH)/txns/encoded 
+# mkdir -p $(BASE_PATH)/txns/sent 
+# @TO_ADDR=$$($(BIN_PATH)/cronosd keys show node1key --keyring-backend $(KEYRING) --home $(BASE_PATH)/node1 -a); \
+# for i in $$(seq 0 $$(($(NUM_ACCOUNTS)-1))); do \
+# 	$(BIN_PATH)/cronosd tx bank send test-key-$$i $$TO_ADDR 100stake --chain-id $(CHAINID) --home $(BASE_PATH)/node1 --keyring-backend $(KEYRING) --generate-only > $(BASE_PATH)/txns/unsigned/txns$$i.json; \
+# 	$(BIN_PATH)/cronosd tx sign $(BASE_PATH)/txns/unsigned/txns$$i.json --chain-id $(CHAINID) --from test-key-$$i --home $(BASE_PATH)/node1 --keyring-backend $(KEYRING) > $(BASE_PATH)/txns/signed/txns$$i.json; \
+# 	$(BIN_PATH)/cronosd tx encode $(BASE_PATH)/txns/signed/txns$$i.json > $(BASE_PATH)/txns/encoded/txns$$i.json; \
+# done 
 
 shot:
 	@NODE_NUM=$$(cat cache.json | jq -r '.node_num') && \
@@ -176,6 +180,7 @@ _start_node:
 	# app.toml
 	@$(SED_CMD) 's|address = "tcp://localhost:1317"|address = "tcp://0.0.0.0:'$$(expr $(BASE_API_PORT) + \( $(NODE_NUM) - 1 \) \* 100)'"|g' $(BASE_PATH)/node$(NODE_NUM)/config/app.toml
 	@$(SED_CMD) 's/swagger = false/swagger = true/g' $(BASE_PATH)/node$(NODE_NUM)/config/app.toml
+	@$(SED_CMD) 's/max-txs = -1/max-txs = 100000/g' $(BASE_PATH)/node$(NODE_NUM)/config/app.toml
 
 	@P2P_PEERS=""; \
 	if [ "$(NODE_NUM)" != "1" ]; then \
@@ -198,7 +203,6 @@ _start_node:
 		--pruning=nothing \
 		--evm.tracer=json $(TRACE) \
 		--log_level $(LOGLEVEL) \
-		--log_format=json \
 		--minimum-gas-prices=0stake \
 		--chain-id=$(CHAINID) \
 		--keyring-backend=$(KEYRING) \

@@ -13,35 +13,33 @@ import (
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 const (
-	keyringPassphrase = "test"
-	keyringAppName    = "cronos"
-	keyringBackend    = keyring.BackendTest
-	concurrencyLimit  = 100
-	homeDir           = "node/node1"
+	keyringAppName   = "cronos"
+	keyringBackend   = keyring.BackendTest
+	concurrencyLimit = 100
+	homePath         = "node/node1"
 )
 
 var (
 	numAccounts = flag.Int("a", 2, "number of accounts to generate")
 )
 
-func MakeCodec() codec.Codec {
+func makeCodec() codec.Codec {
 	interfaceRegistry := types.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 	cryptocodec.RegisterInterfaces(interfaceRegistry)
 	return marshaler
 }
 
-func init() {
-	config := sdk.GetConfig()
-	config.SetBech32PrefixForAccount("crc", "crcpub")
-	config.SetBech32PrefixForValidator("crcvaloper", "crcvaloperpub")
-	config.SetBech32PrefixForConsensusNode("crcvalcons", "crcvalconspub")
-	config.Seal()
-}
+// func init() {
+// 	config := sdk.GetConfig()
+// 	config.SetBech32PrefixForAccount("crc", "crcpub")
+// 	config.SetBech32PrefixForValidator("crcvaloper", "crcvaloperpub")
+// 	config.SetBech32PrefixForConsensusNode("crcvalcons", "crcvalconspub")
+// 	config.Seal()
+// }
 
 func createKey(index int, kr keyring.Keyring, wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -63,18 +61,18 @@ func createKey(index int, kr keyring.Keyring, wg *sync.WaitGroup) {
 func main() {
 	flag.Parse()
 
-	err := os.MkdirAll(homeDir, 0755)
+	err := os.MkdirAll(homePath, 0755)
 	if err != nil {
 		fmt.Printf("Failed to create home directory: %v\n", err)
 		return
 	}
 
-	cdc := MakeCodec()
+	cdc := makeCodec()
 
 	kr, err := keyring.New(
 		keyringAppName,
 		keyringBackend,
-		homeDir,
+		homePath,
 		os.Stdin,
 		cdc,
 	)
@@ -88,7 +86,7 @@ func main() {
 
 	fmt.Printf("Starting to generate %d keys...\n", *numAccounts)
 
-	for i := 1; i <= *numAccounts; i++ {
+	for i := 0; i < *numAccounts; i++ {
 		wg.Add(1)
 		semaphore <- struct{}{}
 
@@ -104,5 +102,5 @@ func main() {
 
 	wg.Wait()
 	fmt.Printf("\nCompleted generating %d keys\n", *numAccounts)
-	fmt.Printf("\nYou can check keys using:\ncronosd keys list --keyring-backend test --home %s\n", homeDir)
+	fmt.Printf("\nYou can check keys using:\ncronosd keys list --keyring-backend test --home %s\n", homePath)
 }
