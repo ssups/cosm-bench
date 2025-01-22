@@ -23,11 +23,12 @@ import (
 )
 
 const (
-	keyringAppName   = "cronos"
-	keyringBackend   = keyring.BackendTest
-	homePath         = "node/node1"
-	tokenDenom       = "stake"
-	concurrencyLimit = 100
+	keyringAppName       = "cronos"
+	keyringBackend       = keyring.BackendTest
+	homePath             = "node/node1"
+	tokenDenom           = "stake"
+	concurrencyLimit     = 100
+	balaceForEachAccount = "1000000000000000000000"
 )
 
 var (
@@ -81,7 +82,7 @@ func main() {
 	bankGenState := banktypes.GetGenesisStateFromAppState(cdc, appState)
 
 	preAccountsLen := len(authGenState.Accounts)
-	amount, ok := math.NewIntFromString("1000000000000000000000")
+	amount, ok := math.NewIntFromString(balaceForEachAccount)
 	if !ok {
 		log.Fatal("failed to parse amount")
 	}
