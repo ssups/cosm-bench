@@ -31,6 +31,7 @@ const (
 	chainID          = "cronos_777-1"
 	keyringAppName   = "cronos"
 	keyringBackend   = keyring.BackendTest
+	keyFilePrefix    = "test-key-" // key file name prefix => {keyFilePrefix}0.info, {keyFilePrefix}1.info ...
 	denom            = "stake"
 	homePath         = "node/node1"
 	concurrencyLimit = 100
@@ -113,7 +114,7 @@ func newTxCreator() (*txCreator, error) {
 }
 
 func (tc *txCreator) createSignedTx(ctx context.Context, accountIndex int) ([]byte, error) {
-	keyName := fmt.Sprintf("test-key-%d", accountIndex)
+	keyName := fmt.Sprintf("%s%d", keyFilePrefix, accountIndex)
 
 	key, err := tc.kr.Key(keyName)
 	if err != nil {

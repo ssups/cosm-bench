@@ -25,6 +25,7 @@ import (
 const (
 	keyringAppName       = "cronos"
 	keyringBackend       = keyring.BackendTest
+	keyFilePrefix        = "test-key-" // key file name prefix => {keyFilePrefix}0.info, {keyFilePrefix}1.info ...
 	homePath             = "node/node1"
 	tokenDenom           = "stake"
 	concurrencyLimit     = 100
@@ -107,7 +108,7 @@ func main() {
 			default:
 			}
 
-			keyName := fmt.Sprintf("test-key-%d", i)
+			keyName := fmt.Sprintf("%s%d", keyFilePrefix, i)
 			key, err := kr.Key(keyName)
 			if err != nil {
 				return err

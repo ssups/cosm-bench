@@ -19,9 +19,9 @@ import (
 const (
 	keyringAppName   = "cronos"
 	keyringBackend   = keyring.BackendTest
+	keyFilePrefix    = "test-key-" // key file will be generated => {keyFilePrefix}0.info, {keyFilePrefix}1.info ...
 	concurrencyLimit = 100
 	homePath         = "node/node1"
-	keyFilePrefix    = "test-key-" // key file will be generated => {keyFilePrefix}0.info, {keyFilePrefix}1.info ...
 )
 
 var (
