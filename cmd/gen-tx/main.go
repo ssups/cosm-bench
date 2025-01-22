@@ -28,14 +28,15 @@ import (
 )
 
 const (
-	chainID          = "cronos_777-1"
-	keyringAppName   = "cronos"
-	keyringBackend   = keyring.BackendTest
-	keyFilePrefix    = "test-key-" // key file name prefix => {keyFilePrefix}0.info, {keyFilePrefix}1.info ...
-	denom            = "stake"
-	homePath         = "node/node1"
-	concurrencyLimit = 100
-	grpcEndpoint     = "localhost:9090"
+	chainID               = "cronos_777-1"
+	keyringAppName        = "cronos"
+	keyringBackend        = keyring.BackendTest
+	keyFilePrefix         = "test-key-" // key file name prefix => {keyFilePrefix}0.info, {keyFilePrefix}1.info ...
+	denom                 = "stake"
+	homePath              = "node/node1"
+	concurrencyLimit      = 100
+	grpcEndpoint          = "localhost:9090"
+	tendermintRpcEndpoint = "tcp://localhost:26657"
 )
 
 var (
@@ -77,6 +78,7 @@ type txCreator struct {
 	authClient authtypes.QueryClient
 	factory    tx.Factory
 	coins      sdk.Coins
+	clientCtx  client.Context
 }
 
 func newTxCreator() (*txCreator, error) {
@@ -98,6 +100,15 @@ func newTxCreator() (*txCreator, error) {
 		return nil, fmt.Errorf("failed to connect to gRPC: %v", err)
 	}
 
+	clientCtx := client.Context{
+		ChainID:           chainID,
+		NodeURI:           tendermintRpcEndpoint,
+		GRPCClient:        grpcConn,
+		Codec:             txConfig.Codec,
+		TxConfig:          txConfig.TxConfig,
+		InterfaceRegistry: txConfig.InterfaceRegistry,
+	}
+
 	factory := tx.Factory{}.
 		WithTxConfig(txConfig.TxConfig).
 		WithKeybase(kr).
@@ -110,6 +121,7 @@ func newTxCreator() (*txCreator, error) {
 		authClient: authtypes.NewQueryClient(grpcConn),
 		factory:    factory,
 		coins:      sdk.NewCoins(sdk.NewCoin(denom, math.NewInt(100))),
+		clientCtx:  clientCtx,
 	}, nil
 }
 
@@ -145,8 +157,13 @@ func (tc *txCreator) createSignedTx(ctx context.Context, accountIndex int) ([]by
 		return nil, fmt.Errorf("failed to set msgs: %v", err)
 	}
 
-	txFactory := tc.factory.WithAccountNumber(account.GetAccountNumber()).WithSequence(account.GetSequence())
-	txBuilder.SetGasLimit(200000)
+	txFactory := tc.factory.WithAccountNumber(account.GetAccountNumber()).WithSequence(account.GetSequence()).WithGasAdjustment(1)
+	_, adjustedGas, err := tx.CalculateGas(tc.clientCtx, txFactory, msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate gas: %v", err)
+	}
+
+	txBuilder.SetGasLimit(adjustedGas)
 	// txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin(denom, math.NewInt(2000))))
 	if err := tx.Sign(ctx, txFactory, keyName, txBuilder, false); err != nil {
 		return nil, fmt.Errorf("failed to sign: %v", err)
