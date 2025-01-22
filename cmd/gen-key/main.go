@@ -1,18 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
 	"os"
-	"sync"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -20,10 +21,12 @@ const (
 	keyringBackend   = keyring.BackendTest
 	concurrencyLimit = 100
 	homePath         = "node/node1"
+	keyFilePrefix    = "test-key-" // key file will be generated => {keyFilePrefix}0.info, {keyFilePrefix}1.info ...
 )
 
 var (
-	numAccounts = flag.Int("a", 2, "number of accounts to generate")
+	// eg) go run gen-key/main.go --a 200
+	numAccounts = flag.Int("a", 100, "number of accounts to generate")
 )
 
 func makeCodec() codec.Codec {
@@ -33,18 +36,8 @@ func makeCodec() codec.Codec {
 	return marshaler
 }
 
-// func init() {
-// 	config := sdk.GetConfig()
-// 	config.SetBech32PrefixForAccount("crc", "crcpub")
-// 	config.SetBech32PrefixForValidator("crcvaloper", "crcvaloperpub")
-// 	config.SetBech32PrefixForConsensusNode("crcvalcons", "crcvalconspub")
-// 	config.Seal()
-// }
-
-func createKey(index int, kr keyring.Keyring, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	keyName := fmt.Sprintf("test-key-%d", index)
+func createKey(index int, kr keyring.Keyring) {
+	keyName := fmt.Sprintf("%s%d", keyFilePrefix, index)
 	_, err := kr.Key(keyName)
 	if err == nil {
 		fmt.Printf("Key %s already exists, skipping...\n", keyName)
@@ -81,26 +74,31 @@ func main() {
 		return
 	}
 
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, concurrencyLimit)
+	sem := semaphore.NewWeighted(int64(concurrencyLimit))
 
 	fmt.Printf("Starting to generate %d keys...\n", *numAccounts)
 
 	for i := 0; i < *numAccounts; i++ {
-		wg.Add(1)
-		semaphore <- struct{}{}
+		if err := sem.Acquire(context.Background(), 1); err != nil {
+			log.Printf("Failed to acquire semaphore: %v", err)
+			break
+		}
 
-		go func(index int) {
-			defer func() { <-semaphore }()
-			createKey(index, kr, &wg)
-		}(i)
+		go func() {
+			i := i
+			defer sem.Release(1)
+			createKey(i, kr)
+		}()
 
 		if (i+1)%1000 == 0 {
 			fmt.Printf("Progress: %d/%d keys initiated...\n", i+1, *numAccounts)
 		}
 	}
 
-	wg.Wait()
+	if err := sem.Acquire(context.Background(), int64(concurrencyLimit)); err != nil {
+		log.Printf("Failed to acquire semaphore: %v", err)
+	}
+
 	fmt.Printf("\nCompleted generating %d keys\n", *numAccounts)
 	fmt.Printf("\nYou can check keys using:\ncronosd keys list --keyring-backend test --home %s\n", homePath)
 }

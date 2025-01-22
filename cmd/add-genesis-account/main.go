@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -30,8 +31,17 @@ const (
 )
 
 var (
-	numAccounts = flag.Int("a", 2, "number of accounts to generate")
+	// eg) go run gen-key/main.go --a 200
+	numAccounts = flag.Int("a", 100, "number of accounts to generate")
 )
+
+func init() {
+	config := sdk.GetConfig()
+	config.SetBech32PrefixForAccount("crc", "crcpub")
+	// config.SetBech32PrefixForValidator("crcvaloper", "crcvaloperpub")
+	// config.SetBech32PrefixForConsensusNode("crcvalcons", "crcvalconspub")
+	config.Seal()
+}
 
 func makeCodec() (*codec.ProtoCodec, *types.InterfaceRegistry) {
 	interfaceRegistry := types.NewInterfaceRegistry()
@@ -39,14 +49,6 @@ func makeCodec() (*codec.ProtoCodec, *types.InterfaceRegistry) {
 	cryptocodec.RegisterInterfaces(interfaceRegistry)
 	authtypes.RegisterInterfaces(interfaceRegistry)
 	return cdc, &interfaceRegistry
-}
-
-func init() {
-	config := sdk.GetConfig()
-	config.SetBech32PrefixForAccount("crc", "crcpub")
-	// config.SetBech32PrefixForValidator("crcvaloper", "crcvaloperpub")
-	// config.SetBech32PrefixForConsensusNode("crcvalcons", "crcvalconspub")
-	// config.Seal()
 }
 
 func main() {
@@ -91,36 +93,43 @@ func main() {
 	additionAccounts := make([]*types.Any, *numAccounts)
 	additionBalances := make([]banktypes.Balance, *numAccounts)
 
-	g := new(errgroup.Group)
+	g, ctx := errgroup.WithContext(context.Background())
 	g.SetLimit(concurrencyLimit)
 
 	for i := 0; i < *numAccounts; i++ {
 		i := i
+
 		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			keyName := fmt.Sprintf("test-key-%d", i)
 			key, err := kr.Key(keyName)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			addr, err := key.GetAddress()
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			pub, err := key.GetPubKey()
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			acc := authtypes.NewBaseAccount(addr, pub, uint64(preAccountsLen+i), 0)
 			if err := acc.Validate(); err != nil {
-				log.Fatalf("Failed to validate account: %v", err)
+				return err
 			}
 
 			anyacc, err := types.NewAnyWithValue(acc)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			additionAccounts[i] = anyacc
@@ -128,17 +137,13 @@ func main() {
 				Address: addr.String(),
 				Coins:   coins,
 			}
-			// authGenState.Accounts = append(authGenState.Accounts, anyacc)
-			// bankGenState.Balances = append(bankGenState.Balances, banktypes.Balance{
-			// 	Address: addr.String(),
-			// 	Coins:   coins,
-			// })
-
 			return nil
 		})
 	}
 
-	g.Wait()
+	if err := g.Wait(); err != nil {
+		log.Fatalf("Error occurred: %v", err)
+	}
 
 	authGenState.Accounts = append(authGenState.Accounts, additionAccounts...)
 	bankGenState.Balances = append(bankGenState.Balances, additionBalances...)

@@ -19,7 +19,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 
-	// authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -39,8 +38,15 @@ const (
 )
 
 var (
-	numAccounts = flag.Int("a", 2, "Number of accounts to make tx")
+	// eg) go run gen-key/main.go --a 200
+	numAccounts = flag.Int("a", 100, "Number of accounts to make tx")
 )
+
+func init() {
+	config := sdk.GetConfig()
+	config.SetBech32PrefixForAccount("crc", "crcpub")
+	config.Seal()
+}
 
 type txCreateConfig struct {
 	client.TxConfig
@@ -146,12 +152,6 @@ func (tc *txCreator) createSignedTx(ctx context.Context, accountIndex int) ([]by
 	}
 
 	return tc.txConfig.TxConfig.TxEncoder()(txBuilder.GetTx())
-}
-
-func init() {
-	config := sdk.GetConfig()
-	config.SetBech32PrefixForAccount("crc", "crcpub")
-	config.Seal()
 }
 
 func main() {
