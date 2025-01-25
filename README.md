@@ -37,10 +37,14 @@ go > 1.23.1
     make reload
 
     # 트잭 전송 및 측정
-    make shot
-    # or
-    ./bin/send-tx --tps {초당 전송할 트잭 갯수} --time {실행 시간(초)}
+    make shot tps=500 runtime=600
 
+```
+
+# metric
+
+```shell
+    make metric
 ```
 
 # Result
