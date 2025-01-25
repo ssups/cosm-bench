@@ -4,3 +4,6 @@
 tx_log.txt
 tx_results.json
 cache.json
+
+/logs/*
+/results/*

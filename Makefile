@@ -7,7 +7,7 @@ else
 endif  
 
 # 테스트 계정수
-NUM_ACCOUNTS := 10
+NUM_ACCOUNTS := 10000
 
 # 기본 설정
 BIN_PATH := ./bin
@@ -71,7 +71,7 @@ define setup_genesis
     cat $(BASE_PATH)/node1/config/genesis.json | jq '.app_state["feemarket"]["params"]["no_base_fee"]=true' > $(BASE_PATH)/node1/config/tmp_genesis.json && mv $(BASE_PATH)/node1/config/tmp_genesis.json $(BASE_PATH)/node1/config/genesis.json
 
 	cat $(BASE_PATH)/node1/config/genesis.json | jq '.consensus["params"]["block"]["time_iota_ms"]="1000"' > $(BASE_PATH)/node1/config/tmp_genesis.json && mv $(BASE_PATH)/node1/config/tmp_genesis.json $(BASE_PATH)/node1/config/genesis.json
-	cat $(BASE_PATH)/node1/config/genesis.json | jq '.consensus["params"]["block"]["max_gas"]="10000000"' > $(BASE_PATH)/node1/config/tmp_genesis.json && mv $(BASE_PATH)/node1/config/tmp_genesis.json $(BASE_PATH)/node1/config/genesis.json
+	cat $(BASE_PATH)/node1/config/genesis.json | jq '.consensus["params"]["block"]["max_gas"]="100000000"' > $(BASE_PATH)/node1/config/tmp_genesis.json && mv $(BASE_PATH)/node1/config/tmp_genesis.json $(BASE_PATH)/node1/config/genesis.json
 
 	@for i in $$(seq 1 $(1)); do \
 		$(BIN_PATH)/cronosd keys add node$${i}key --keyring-backend $(KEYRING) --algo $(KEYALGO) --home $(BASE_PATH)/node$${i}; \
@@ -145,24 +145,21 @@ start-quad:
 
 reload:
 	$(BIN_PATH)/gen-tx --a $(NUM_ACCOUNTS)
-# mkdir -p $(BASE_PATH)/txns/signed
-# mkdir -p $(BASE_PATH)/txns/unsigned
-# mkdir -p $(BASE_PATH)/txns/encoded 
-# mkdir -p $(BASE_PATH)/txns/sent 
-# @TO_ADDR=$$($(BIN_PATH)/cronosd keys show node1key --keyring-backend $(KEYRING) --home $(BASE_PATH)/node1 -a); \
-# for i in $$(seq 0 $$(($(NUM_ACCOUNTS)-1))); do \
-# 	$(BIN_PATH)/cronosd tx bank send test-key-$$i $$TO_ADDR 100stake --chain-id $(CHAINID) --home $(BASE_PATH)/node1 --keyring-backend $(KEYRING) --generate-only > $(BASE_PATH)/txns/unsigned/txns$$i.json; \
-# 	$(BIN_PATH)/cronosd tx sign $(BASE_PATH)/txns/unsigned/txns$$i.json --chain-id $(CHAINID) --from test-key-$$i --home $(BASE_PATH)/node1 --keyring-backend $(KEYRING) > $(BASE_PATH)/txns/signed/txns$$i.json; \
-# 	$(BIN_PATH)/cronosd tx encode $(BASE_PATH)/txns/signed/txns$$i.json > $(BASE_PATH)/txns/encoded/txns$$i.json; \
-# done 
 
-shot:
+
+tps ?= 500  
+runtime ?= 600  
+shot:  
 	@NODE_NUM=$$(cat cache.json | jq -r '.node_num') && \
-	$(BIN_PATH)/send-tx --tps 500 --time 600 --nodes $$NODE_NUM 
+	go run ./cmd/send-tx/main.go $(tps) $(runtime)  
+
+metric:
+	go run ./cmd/update-height/main.go && \
+	go run ./cmd/metrics/main.go
 
 # 내부 노드 시작 함수  
-_start_node:
-	@echo "Starting node $(NODE_NUM)..."
+_start_node:  
+	@echo "Starting node $(NODE_NUM)..."  
 
 	@if [ "$(NODE_NUM)" != "1" ]; then \
 		cp $(BASE_PATH)/node1/config/genesis.json $(BASE_PATH)/node$(NODE_NUM)/config/genesis.json; \
@@ -186,7 +183,7 @@ _start_node:
 	if [ "$(NODE_NUM)" != "1" ]; then \
 		P2P_PEERS="--p2p.persistent_peers=$$($(BIN_PATH)/cronosd tendermint show-node-id --home $(BASE_PATH)/node1)@127.0.0.1:$(BASE_P2P_PORT)"; \
 	fi; \
-	nohup $(BIN_PATH)/cronosd start \
+	$(BIN_PATH)/cronosd start \
 		--home=$(BASE_PATH)/node$(NODE_NUM) \
 		--moniker=node$(NODE_NUM) \
 		--api.enable \
@@ -206,8 +203,9 @@ _start_node:
 		--minimum-gas-prices=0stake \
 		--chain-id=$(CHAINID) \
 		--keyring-backend=$(KEYRING) \
-		--json-rpc.api eth,txpool,personal,net,debug,web3,miner \
-		>> $(BASE_PATH)/node$(NODE_NUM)/node$(NODE_NUM).log 2>&1 & 
+		--json-rpc.api eth,txpool,personal,net,debug,web3,miner 2>&1 | \
+	./script/log_capture.sh $(NODE_NUM) &  
+	@echo "Node $(NODE_NUM) started" 
 
 _clean_nodes:
 	@echo "Cleaning up..."
@@ -217,6 +215,7 @@ _clean_nodes:
 	rm -rf $(BASE_PATH)/node3/*
 	rm -rf $(BASE_PATH)/node4/*
 	rm -rf $(BASE_PATH)/txns/*
+	rm -rf logs/*
 
 # 노드 정지  
 stop:
