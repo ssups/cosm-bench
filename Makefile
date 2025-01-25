@@ -7,7 +7,7 @@ else
 endif  
 
 # 테스트 계정수
-NUM_ACCOUNTS := 10000
+NUM_ACCOUNTS := 1000
 
 # 기본 설정
 BIN_PATH := ./bin
@@ -53,6 +53,7 @@ define init_nodes
 	@for i in $$(seq 1 $(1)); do \
 		echo "Initializing node$$i..."; \
 		mkdir -p $(BASE_PATH)/node$$i; \
+		mkdir -p logs; \
 		$(BIN_PATH)/cronosd init $(MONIKER) --chain-id $(CHAINID) --home $(BASE_PATH)/node$$i; \
 	done  
 endef  
